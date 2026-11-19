@@ -127,6 +127,36 @@ const additionalLinkProtocols = [
 	'message',
 ]
 
+// Serializes copied content as plain text, keeping list markers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeFragmentAsText(fragment: any, indent = ''): string {
+	const blocks: string[] = []
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	fragment.forEach((node: any) => {
+		const name = node.type.name
+		if (name === 'bulletList' || name === 'orderedList' || name === 'taskList') {
+			const lines: string[] = []
+			let i = (node.attrs?.start ?? 1) as number
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			node.forEach((item: any) => {
+				let marker = '- '
+				if (name === 'orderedList') {
+					marker = `${i++}. `
+				} else if (name === 'taskList') {
+					marker = item.attrs?.checked ? '- [x] ' : '- [ ] '
+				}
+				lines.push(indent + marker + serializeFragmentAsText(item.content, indent + '  ').trimStart())
+			})
+			blocks.push(lines.join('\n'))
+		} else if (node.isTextblock || node.isLeaf) {
+			blocks.push(node.textContent)
+		} else {
+			blocks.push(serializeFragmentAsText(node.content, indent))
+		}
+	})
+	return blocks.join('\n')
+}
+
 export function createEditorExtensions(deps: EditorExtensionDeps): Extensions {
 	const {
 		t,
@@ -233,6 +263,7 @@ export function createEditorExtensions(deps: EditorExtensionDeps): Extensions {
 					props: {
 						clipboardParser: createClipboardParser(this.editor.schema),
 						transformPasted: slice => repairSliceContent(slice),
+						clipboardTextSerializer: slice => serializeFragmentAsText(slice.content),
 
 						handlePaste: (view, event) => {
 
